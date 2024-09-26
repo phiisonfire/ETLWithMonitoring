@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  spark-master:
+    image: bitnami/spark:3.5.2
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+
+  spark-worker-1:
+    image: bitnami/spark:3.5.2
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 3g
+        reservations:
+          cpus: "2"
+          memory: 3g
+
+  spark-worker-2:
+    image: bitnami/spark:3.5.2
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    depends_on:
+      - spark-master
+    ports:
+      - "8082:8081"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 3g
+        reservations:
+          cpus: "2"
+          memory: 3g
+
+  postgres:
+    image: bitnami/postgresql:12
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      PGDATA: /bitnami/postgresql/data  # Specify PostgreSQL data directory
+    volumes:
+      - ./data/postgresql-persistence:/bitnami/postgresql/data  # Mount data directory
+      - ./data/backup/dvdrental.tar:/data/dvdrental.tar
+      # - ./scripts/restore-db.sh:/docker-entrypoint-initdb.d/restore-db.sh    # Mount the restore script
+    ports:
+      - "5432:5432"
+    # command: /bin/bash -c "sleep 10 && /scripts/restore-db.sh"  # Run the restore script after a delay
+
+  hdfs-namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    environment:
+      - CLUSTER_NAME=hadoop
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - HDFS_CONF_dfs_replication=1
+    ports:
+      - "9870:9870" # Namenode web UI
+      - "8020:8020" # Namenode service port
+    volumes:
+      - ./hadoop/namenode:/hadoop/dfs/name
+    networks:
+      - hadoop
+
+  hdfs-datanode-1:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://hdfs-namenode:8020
+      - HDFS_CONF_dfs_datanode_data_dir=file:///hadoop/dfs/data
+    depends_on:
+      - hdfs-namenode
+    ports:
+      - "9864:9864" # Datanode web UI
+    volumes:
+      - ./hadoop/datanode:/hadoop/dfs/data
+    networks:
+      - hadoop
+
+  hdfs-datanode-2:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://hdfs-namenode:8020
+      - HDFS_CONF_dfs_datanode_data_dir=file:///hadoop/dfs/data
+    depends_on:
+      - hdfs-namenode
+    ports:
+      - "9865:9864" # Datanode 2 web UI
+    volumes:
+      - ./hadoop/datanode2:/hadoop/dfs/data
+    networks:
+      - hadoop
+
+networks:
+  hadoop:
+    driver: bridge
